@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>내 레시피 수첩</title>
+<style>
+  :root{--bg:#f7f5f0;--card:#fff;--ink:#222;--sub:#777;--accent:#2f6b4f;--line:#e4e0d6;--soft:#eaf3ee}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:var(--bg);color:var(--ink)}
+  .wrap{max-width:600px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:22px;margin:8px 0 16px}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:10px 14px}
+  button:disabled{opacity:.5;cursor:default}
+  .primary{background:var(--accent);color:#fff;font-weight:600}
+  .ghost{background:transparent;color:var(--accent);padding:6px 8px}
+  .danger{background:transparent;color:#b3382c;padding:6px 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+  .item{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+  .item b{font-size:16px}.meta{color:var(--sub);font-size:13px;margin-top:2px}
+  .empty{color:var(--sub);text-align:center;padding:30px 0;line-height:1.6}
+  label.l{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+  input[type=text],input[type=number],textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  textarea{min-height:90px;resize:vertical}
+  h2{font-size:16px;margin:20px 0 8px}
+  .chk{display:flex;gap:12px;align-items:flex-start;padding:12px 4px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.5;cursor:pointer}
+  .chk input{width:22px;height:22px;margin-top:3px;accent-color:var(--accent);flex:none}
+  .chk.done span{text-decoration:line-through;color:#aaa}
+  .num{color:var(--accent);font-weight:700;flex:none}
+  .row{display:flex;gap:8px;margin-top:16px}
+  .hint{font-size:12px;color:var(--sub);margin-top:24px;text-align:center;line-height:1.6}
+  .box{background:var(--soft);border-radius:14px;padding:14px 16px;margin-bottom:6px}
+  .box p{margin:0 0 8px;font-size:13px;color:#4a6b5a;line-height:1.5}
+  .msg{font-size:13px;margin-top:8px;line-height:1.5}.err{color:#b3382c}.ok{color:var(--accent)}
+  a{color:var(--accent)}
+  .wrap{padding-bottom:170px}
+  .tbtns{display:flex;flex-wrap:wrap;gap:6px;padding:8px 4px 10px 38px;border-bottom:1px solid var(--line)}
+  .tbtn{background:var(--soft);color:var(--accent);font-weight:600;padding:8px 12px}
+  #timers{position:fixed;left:0;right:0;bottom:0;padding:8px 12px;display:flex;flex-direction:column;gap:6px;z-index:10;pointer-events:none}
+  .tm{pointer-events:auto;max-width:600px;margin:0 auto;width:100%;background:#222;color:#fff;border-radius:12px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .tm.done{background:#b3382c;animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.7}}
+  .tm .time{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .tm button{background:#fff;color:#222;padding:8px 12px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="timers"></div>
+<script>
+var recipes = [{
+  id: 1, name: "닭가슴살 샐러드", time: 15, source: "",
+  ingredients: "닭가슴살 1조각\n로메인 한 줌\n방울토마토 6개\n올리브오일 1스푼\n레몬즙 1스푼",
+  steps: "닭가슴살을 소금, 후추로 밑간한다\n팬에 앞뒤로 5분씩 굽는다\n채소를 씻어 물기를 뺀다\n닭가슴살을 썰어 채소 위에 올린다\n올리브오일과 레몬즙을 뿌린다",
+  saved: "2026-11-21"
+},{
+  id: 2, name: "애호박 볶음 (예시)", time: 15, source: "",
+  ingredients: "애호박 1개\n양파 반 개\n들기름 1스푼\n소금 약간",
+  steps: "애호박과 양파를 한입 크기로 썬다\n팬에 들기름을 두르고 양파를 넣어 강불에서 2분 볶는다\n애호박을 넣고 강불로 10분 볶는다\n소금으로 간을 한다",
+  saved: "2026-11-21"
+}];
+var view = "list", current = null, draft = null, busy = false, note = "", noteErr = false, checks = {};
+try { var s = localStorage.getItem("recipes2"); if (s) recipes = JSON.parse(s); } catch (e) {}
+function save(){ try { localStorage.setItem("recipes2", JSON.stringify(recipes)); } catch (e) {} }
+function esc(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function lines(t){ return String(t || "").split("\n").map(function(x){return x.trim();}).filter(Boolean); }
+function find(id){ return recipes.filter(function(x){return x.id === id;})[0]; }
+
+function render(){
+  var app = document.getElementById("app"), h = "";
+  if (view === "list") {
+    h += '<div class="top"><h1>🍳 내 레시피 수첩</h1><button class="primary" onclick="openForm()">+ 자료로 추가</button></div>';
+    if (!recipes.length) h += '<div class="empty">아직 레시피가 없어요.<br>유튜브 설명글이나 레시피 글을 붙여 넣으면<br>Claude가 칸을 채워 줘요.</div>';
+    recipes.forEach(function(r){
+      h += '<div class="card item" onclick="openDetail(' + r.id + ')"><div><b>' + esc(r.name) + '</b><div class="meta">조리 ' + esc(r.time) + '분 · 재료 ' + lines(r.ingredients).length + '개 · 단계 ' + lines(r.steps).length + '개</div></div><span>›</span></div>';
+    });
+    h += '<div class="hint">미리보기 화면이에요. 저장은 이 브라우저에만 돼요.</div>';
+  } else if (view === "detail") {
+    var r = find(current), c = checks[r.id] || (checks[r.id] = {});
+    h += '<button class="ghost" onclick="goList()">‹ 목록</button><h1>' + esc(r.name) + '</h1><div class="meta">조리시간 ' + esc(r.time) + '분 · 저장한 날 ' + esc(r.saved) + '</div>';
+    if (r.source && /^https?:\/\//.test(r.source)) h += '<div class="meta"><a href="' + esc(r.source) + '" target="_blank" rel="noopener">원본 영상·글 열기</a></div>';
+    h += '<div class="card" style="display:flex;gap:8px;align-items:center;margin-top:12px"><span>⏱ 직접 타이머</span><input type="number" id="c-min" inputmode="decimal" placeholder="몇 분" style="width:90px"><button class="primary" onclick="startCustom()">시작</button></div>';
+    h += '<h2>🛒 재료 (챙기면 눌러요)</h2><div class="card" style="padding:4px 12px">';
+    lines(r.ingredients).forEach(function(x, i){
+      var k = "i" + i;
+      h += '<label class="chk' + (c[k] ? ' done' : '') + '"><input type="checkbox"' + (c[k] ? ' checked' : '') + ' onchange="tick(' + r.id + ',\'' + k + '\')"><span>' + esc(x) + '</span></label>';
+    });
+    h += '</div><h2>👩‍🍳 조리 순서 (끝내면 눌러요)</h2><div class="card" style="padding:4px 12px">';
+    lines(r.steps).forEach(function(x, i){
+      var k = "s" + i;
+      h += '<label class="chk' + (c[k] ? ' done' : '') + '"><input type="checkbox"' + (c[k] ? ' checked' : '') + ' onchange="tick(' + r.id + ',\'' + k + '\')"><span><span class="num">' + (i + 1) + '.</span> ' + esc(x) + '</span></label>' + timerBtns(r.id, i, x);
+    });
+    h += '</div><div class="row"><button class="ghost" onclick="resetChecks(' + r.id + ')">체크 모두 지우기</button><button class="danger" onclick="del(' + r.id + ')">삭제</button></div>';
+  } else {
+    h += '<button class="ghost" onclick="goList()">‹ 취소</button><h1>자료로 레시피 추가</h1>';
+    h += '<div class="box"><p><b>1단계.</b> 유튜브 영상 설명글, 자막(스크립트), 블로그 레시피 글을 아래에 붙여 넣어요.<br>링크만 넣으면 영상 내용은 읽을 수 없어요. 링크는 원본 표시용으로만 저장돼요.</p>';
+    h += '<label class="l">링크 (선택)</label><input type="text" id="f-src" placeholder="https://youtube.com/..." value="' + esc(draft && draft.source) + '">';
+    h += '<label class="l">붙여 넣을 자료</label><textarea id="f-raw" style="min-height:140px" placeholder="여기에 설명글이나 자막을 붙여 넣어요">' + esc(draft && draft.raw) + '</textarea>';
+    h += '<div class="row"><button class="primary" id="btn-ai" onclick="organize()"' + (busy ? ' disabled' : '') + '>' + (busy ? '정리하는 중…' : '✨ 칸 자동으로 채우기') + '</button></div>';
+    if (note) h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
+    h += '</div>';
+    h += '<h2>2단계. 채워진 내용 확인하고 고치기</h2>';
+    h += '<label class="l">이름</label><input type="text" id="f-name" value="' + esc(draft && draft.name) + '">';
+    h += '<label class="l">조리시간 (분)</label><input type="number" id="f-time" inputmode="numeric" value="' + esc(draft && draft.time) + '">';
+    h += '<label class="l">재료 (한 줄에 하나씩)</label><textarea id="f-ing">' + esc(draft && draft.ingredients) + '</textarea>';
+    h += '<label class="l">조리 순서 (한 줄에 한 단계씩)</label><textarea id="f-steps">' + esc(draft && draft.steps) + '</textarea>';
+    h += '<div class="row"><button class="primary" onclick="add()">저장하기</button></div>';
+  }
+  app.innerHTML = h;
+}
+function readForm(){
+  function v(id){ var e = document.getElementById(id); return e ? e.value : ""; }
+  draft = { source: v("f-src"), raw: v("f-raw"), name: v("f-name"), time: v("f-time"), ingredients: v("f-ing"), steps: v("f-steps") };
+}
+function goList(){ view = "list"; render(); }
+function openForm(){ draft = { source: "", raw: "", name: "", time: "", ingredients: "", steps: "" }; note = ""; busy = false; view = "form"; render(); }
+function openDetail(id){ current = id; view = "detail"; render(); }
+function tick(id, k){ var c = checks[id] || (checks[id] = {}); c[k] = !c[k]; render(); }
+function resetChecks(id){ checks[id] = {}; render(); }
+function add(){
+  readForm();
+  if (!draft.name.trim()) { note = "이름을 먼저 채워 주세요."; noteErr = true; render(); return; }
+  recipes.unshift({ id: Date.now(), name: draft.name.trim(), time: draft.time || "?", source: draft.source.trim(),
+    ingredients: draft.ingredients, steps: draft.steps, saved: new Date().toISOString().slice(0, 10) });
+  save(); note = ""; goList();
+}
+function del(id){ recipes = recipes.filter(function(x){return x.id !== id;}); save(); goList(); }
+
+var timers = [], tmSeq = 0, audioCtx = null, ringIv = null, ringCount = 0, tmShape = "";
+function ensureAudio(){
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (e) {}
+}
+function beep(){
+  try {
+    if (audioCtx) {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = 880; g.gain.value = 0.35;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.3);
+    }
+  } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) {}
+}
+function timerBtns(rid, i, text){
+  var out = "", m, re = /(\d+)\s*(분|초)/g;
+  while ((m = re.exec(text))) {
+    var n = parseInt(m[1], 10), secs = (m[2] === "분") ? n * 60 : n;
+    out += '<button class="tbtn" onclick="startTimer(' + rid + ',' + i + ',' + secs + ')">⏱ ' + n + m[2] + ' 타이머 시작</button>';
+  }
+  return out ? '<div class="tbtns">' + out + '</div>' : "";
+}
+function addTimer(label, secs){
+  ensureAudio();
+  timers.push({ id: ++tmSeq, label: label, end: Date.now() + secs * 1000, done: false });
+  drawTimers();
+}
+function startTimer(rid, si, secs){ var r = find(rid); addTimer((r ? r.name : "") + " · " + (si + 1) + "단계", secs); }
+function startCustom(){
+  var e = document.getElementById("c-min"), v = e ? parseFloat(e.value) : 0;
+  if (!v || v <= 0) { if (e) e.focus(); return; }
+  addTimer("직접 타이머 " + v + "분", Math.round(v * 60));
+}
+function dismissTimer(id){
+  timers = timers.filter(function(t){ return t.id !== id; });
+  if (!timers.some(function(t){ return t.done; })) stopRing();
+  drawTimers();
+}
+function stopRing(){ if (ringIv) { clearInterval(ringIv); ringIv = null; } ringCount = 0; }
+function startRing(){
+  if (ringIv) return;
+  ringCount = 0; beep();
+  ringIv = setInterval(function(){ ringCount++; if (ringCount > 40) { stopRing(); return; } beep(); }, 1000);
+}
+function fmt(s){ s = Math.max(0, Math.ceil(s)); var m = Math.floor(s / 60), x = s % 60; return (m < 10 ? "0" : "") + m + ":" + (x < 10 ? "0" : "") + x; }
+function drawTimers(){
+  var el = document.getElementById("timers"); if (!el) return;
+  var shape = timers.map(function(t){ return t.id + (t.done ? "d" : "r"); }).join(",");
+  if (shape !== tmShape) {
+    tmShape = shape;
+    el.innerHTML = timers.map(function(t){
+      return '<div class="tm' + (t.done ? ' done' : '') + '"><div><div style="font-size:12px;opacity:.8">' + esc(t.label) + '</div><div class="time" id="tm-' + t.id + '">' + (t.done ? "⏰ 끝났어요!" : fmt((t.end - Date.now()) / 1000)) + '</div></div><button onclick="dismissTimer(' + t.id + ')">' + (t.done ? '알람 끄기' : '취소') + '</button></div>';
+    }).join("");
+  } else {
+    timers.forEach(function(t){
+      if (!t.done) { var e = document.getElementById("tm-" + t.id); if (e) e.textContent = fmt((t.end - Date.now()) / 1000); }
+    });
+  }
+}
+setInterval(function(){
+  var now = Date.now(), fin = false;
+  timers.forEach(function(t){ if (!t.done && now >= t.end) { t.done = true; fin = true; } });
+  if (fin) startRing();
+  drawTimers();
+}, 500);
+
+async function organize(){
+  readForm();
+  if (!draft.raw.trim()) { note = draft.source.trim() ? "링크만으로는 영상 내용을 읽을 수 없어요. 영상 설명글이나 자막을 '붙여 넣을 자료' 칸에 넣어 주세요." : "붙여 넣을 자료를 먼저 넣어 주세요."; noteErr = true; render(); return; }
+  busy = true; note = ""; render();
+  try {
+    var sample = await claude.use("sample");
+    if (!sample) throw { message: "이 화면에서는 자동 정리를 쓸 수 없어요. 아래 칸에 직접 적어 주세요." };
+    var prompt = "아래 자료는 요리 레시피 설명이야. 자료에 실제로 있는 내용만 써서 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
+      "형식: {\"name\":\"요리 이름\",\"time\":분 단위 숫자 또는 null,\"ingredients\":[\"재료 + 분량\"],\"steps\":[\"한 단계씩 짧은 문장\"]}\n" +
+      "규칙: 불 세기(강불·중불·약불)와 시간(몇 분)이 자료에 있으면 해당 단계 문장에 '강불에서 10분'처럼 그대로 넣어. 자료에 없는 재료, 분량, 시간은 지어내지 마. 모르면 time은 null, 분량은 빼고 재료 이름만 써. 한국어로 써.\n\n자료:\n" + draft.raw.slice(0, 12000);
+    var out = await sample(prompt, { cache: false });
+    var m = String(out.text || "").match(/\{[\s\S]*\}/);
+    if (!m) throw { message: "정리 결과를 읽지 못했어요. 다시 눌러 주세요." };
+    var j = JSON.parse(m[0]);
+    draft.name = j.name || draft.name;
+    draft.time = (j.time != null ? j.time : draft.time);
+    draft.ingredients = (j.ingredients || []).join("\n");
+    draft.steps = (j.steps || []).join("\n");
+    note = "채웠어요. 아래 내용이 자료와 맞는지 확인하고 고쳐 주세요."; noteErr = false;
+  } catch (e) {
+    note = (e && e.code === "not_granted") ? "자동 정리 사용을 허락해야 해요." : ((e && e.message) || "정리에 실패했어요. 다시 눌러 주세요.");
+    noteErr = true;
+  }
+  busy = false; render();
+}
+render();
+</script>
+</body>
+</html>
