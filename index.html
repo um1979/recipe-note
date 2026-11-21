@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="manifest.webmanifest">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <meta name="theme-color" content="#2f6b4f">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -213,7 +212,7 @@ setInterval(function(){
 
 var SB_URL = "https://gujvlxwiggvhwyqhwpyt.supabase.co";
 var SB_KEY = "sb_publishable_3-lFi36ILFvapBex96Torw_bf1nCW3U";
-var CLOUD = (typeof claude === "undefined") && (typeof supabase !== "undefined"), sb = null, authUser = null, authMsg = "", authErr = false, authBusy = false, authEmail = "";
+var CLOUD = false, sb = null, authUser = null, authMsg = "", authErr = false, authBusy = false, authEmail = "";
 function loginHtml(){
   return '<h1>🍳 내 레시피 수첩</h1><div class="box"><p><b>로그인</b><br>이메일을 적으면 로그인 링크를 보내 드려요. 비밀번호는 필요 없어요.</p>' +
     '<label class="l">이메일</label><input type="email" id="login-email" placeholder="me@example.com" value="' + esc(authEmail) + '" onkeydown="if(event.key===\'Enter\')sendLink()">' +
