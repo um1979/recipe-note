@@ -260,6 +260,7 @@ async function initCloud(){
   if (authUser) await loadCloud(); else render();
 }
 var ytq = "", autoTimer = null;
+var HAS_API = (typeof claude === "undefined") && !/github\.io$/.test(location.hostname) && location.protocol === "https:";
 function isUrl(u){ return /^https?:\/\/\S+$/.test(String(u || "").trim()); }
 function ytId(u){
   var m = String(u || "").trim().match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/);
@@ -273,7 +274,7 @@ function updSrc(){
   var v = e.value.trim(), ok = isUrl(v);
   a.href = ok ? v : "#"; a.style.display = ok ? "inline-block" : "none";
   clearTimeout(autoTimer);
-  if (typeof claude !== "undefined" && ytId(v) && !busy) {
+  if ((typeof claude !== "undefined" || HAS_API) && ytId(v) && !busy) {
     autoTimer = setTimeout(function(){
       readForm();
       if (ytId(draft.source) && !draft.raw.trim() && !draft.name.trim() && !draft.ingredients.trim() && !draft.steps.trim() && !busy) organize();
@@ -313,6 +314,20 @@ async function organize(){
   readForm();
   var material = draft.raw.trim(), vid = ytId(draft.source), usedFrom = "";
   if (!material && !vid) { note = draft.source.trim() ? "유튜브 영상 주소로 읽을 수 없어요. 주소가 맞는지 확인하거나, 설명글을 아래 칸에 붙여 넣어 주세요." : "유튜브 링크를 넣거나, 자료를 붙여 넣어 주세요."; noteErr = true; render(); return; }
+  if (typeof claude === "undefined" && HAS_API && !material) {
+    busy = true; note = ""; render();
+    try {
+      var r = await fetch("/api/fill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: draft.source.trim() }) });
+      var j2 = await r.json().catch(function(){ return {}; });
+      if (!r.ok) throw { message: j2.error || "자동 채우기에 실패했어요. 다시 눌러 주세요." };
+      draft.name = j2.name || draft.name;
+      draft.time = (j2.time != null ? j2.time : draft.time);
+      draft.ingredients = (j2.ingredients || []).join("\n");
+      draft.steps = (j2.steps || []).join("\n");
+      note = "영상을 보고 채웠어요. 아래 내용이 맞는지 확인하고 고쳐 주세요."; noteErr = false;
+    } catch (e) { note = (e && e.message) || "자동 채우기에 실패했어요."; noteErr = true; }
+    busy = false; render(); return;
+  }
   if (typeof claude === "undefined") { note = "자동 채우기는 Claude 안에서만 돼요. 지금은 아래 칸에 이름, 재료, 순서를 직접 적어 주세요."; noteErr = true; render(); return; }
   busy = true; note = ""; render();
   try {
