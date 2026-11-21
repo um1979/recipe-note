@@ -1,0 +1,16 @@
+{
+  "name": "내 레시피 수첩",
+  "short_name": "레시피 수첩",
+  "description": "레시피를 저장하고, 요리하면서 체크하고 타이머를 쓰는 앱",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f5f0",
+  "theme_color": "#2f6b4f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
