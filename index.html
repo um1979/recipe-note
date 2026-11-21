@@ -34,6 +34,8 @@
   .box p{margin:0 0 8px;font-size:13px;color:#4a6b5a;line-height:1.5}
   .msg{font-size:13px;margin-top:8px;line-height:1.5}.err{color:#b3382c}.ok{color:var(--accent)}
   a{color:var(--accent)}
+  a.linkbtn{display:inline-block;text-decoration:none;border-radius:10px;padding:10px 14px;white-space:nowrap;font-weight:600}
+  a.linkbtn.ghost{padding:6px 8px;color:var(--accent)}
   .wrap{padding-bottom:170px}
   .tbtns{display:flex;flex-wrap:wrap;gap:6px;padding:8px 4px 10px 38px;border-bottom:1px solid var(--line)}
   .tbtn{background:var(--soft);color:var(--accent);font-weight:600;padding:8px 12px}
@@ -71,6 +73,7 @@ function render(){
   var app = document.getElementById("app"), h = "";
   if (view === "list") {
     h += '<div class="top"><h1>🍳 내 레시피 수첩</h1><button class="primary" onclick="openForm()">+ 자료로 추가</button></div>';
+    h += '<div class="card" style="padding:10px 12px"><div style="display:flex;gap:8px;align-items:center"><input type="text" id="yt-q" placeholder="유튜브에서 찾고 싶은 요리 검색" value="' + esc(ytq) + '" oninput="updYt()" onkeydown="ytKey(event)"><a id="yt-go" class="primary linkbtn" target="_blank" rel="noopener" href="' + ytUrl(ytq) + '">▶ 검색</a></div><div class="meta">누르면 유튜브가 새 창으로 열려요. 영상을 보다가 링크를 복사해서 "+ 자료로 추가"에 넣으면 돼요.</div></div>';
     if (!recipes.length) h += '<div class="empty">아직 레시피가 없어요.<br>유튜브 설명글이나 레시피 글을 붙여 넣으면<br>Claude가 칸을 채워 줘요.</div>';
     recipes.forEach(function(r){
       h += '<div class="card item" onclick="openDetail(' + r.id + ')"><div><b>' + esc(r.name) + '</b><div class="meta">조리 ' + esc(r.time) + '분 · 재료 ' + lines(r.ingredients).length + '개 · 단계 ' + lines(r.steps).length + '개</div></div><span>›</span></div>';
@@ -79,7 +82,7 @@ function render(){
   } else if (view === "detail") {
     var r = find(current), c = checks[r.id] || (checks[r.id] = {});
     h += '<button class="ghost" onclick="goList()">‹ 목록</button><h1>' + esc(r.name) + '</h1><div class="meta">조리시간 ' + esc(r.time) + '분 · 저장한 날 ' + esc(r.saved) + '</div>';
-    if (r.source && /^https?:\/\//.test(r.source)) h += '<div class="meta"><a href="' + esc(r.source) + '" target="_blank" rel="noopener">원본 영상·글 열기</a></div>';
+    if (isUrl(r.source)) h += '<div style="margin-top:10px"><a class="primary linkbtn" href="' + esc(r.source) + '" target="_blank" rel="noopener">▶ 원본 영상·글 열기</a></div>';
     h += '<div class="card" style="display:flex;gap:8px;align-items:center;margin-top:12px"><span>⏱ 직접 타이머</span><input type="number" id="c-min" inputmode="decimal" placeholder="몇 분" style="width:90px"><button class="primary" onclick="startCustom()">시작</button></div>';
     h += '<h2>🛒 재료 (챙기면 눌러요)</h2><div class="card" style="padding:4px 12px">';
     lines(r.ingredients).forEach(function(x, i){
@@ -94,9 +97,10 @@ function render(){
     h += '</div><div class="row"><button class="ghost" onclick="resetChecks(' + r.id + ')">체크 모두 지우기</button><button class="danger" onclick="del(' + r.id + ')">삭제</button></div>';
   } else {
     h += '<button class="ghost" onclick="goList()">‹ 취소</button><h1>자료로 레시피 추가</h1>';
-    h += '<div class="box"><p><b>1단계.</b> 유튜브 영상 설명글, 자막(스크립트), 블로그 레시피 글을 아래에 붙여 넣어요.<br>링크만 넣으면 영상 내용은 읽을 수 없어요. 링크는 원본 표시용으로만 저장돼요.</p>';
-    h += '<label class="l">링크 (선택)</label><input type="text" id="f-src" placeholder="https://youtube.com/..." value="' + esc(draft && draft.source) + '">';
-    h += '<label class="l">붙여 넣을 자료</label><textarea id="f-raw" style="min-height:140px" placeholder="여기에 설명글이나 자막을 붙여 넣어요">' + esc(draft && draft.raw) + '</textarea>';
+    h += '<div class="box"><p><b>1단계.</b> 유튜브 링크를 넣고 "칸 자동으로 채우기"를 눌러요. Claude가 영상 설명과 자막을 가져와서 칸을 채워요.<br>자막이 없거나 안 읽히면, 설명글·블로그 글을 아래 칸에 붙여 넣어 주세요.</p>';
+    h += '<label class="l">영상 링크</label><input type="text" id="f-src" placeholder="https://youtube.com/..." oninput="updSrc()" value="' + esc(draft && draft.source) + '">';
+    h += '<a id="src-open" class="ghost linkbtn" target="_blank" rel="noopener" href="' + (isUrl(draft && draft.source) ? esc(draft.source) : '#') + '" style="display:' + (isUrl(draft && draft.source) ? 'inline-block' : 'none') + ';margin-top:4px">▶ 영상 열어서 보기</a>';
+    h += '<label class="l">붙여 넣을 자료 (링크만 쓰면 비워 둬요)</label><textarea id="f-raw" style="min-height:140px" placeholder="여기에 설명글이나 자막을 붙여 넣어요">' + esc(draft && draft.raw) + '</textarea>';
     h += '<div class="row"><button class="primary" id="btn-ai" onclick="organize()"' + (busy ? ' disabled' : '') + '>' + (busy ? '정리하는 중…' : '✨ 칸 자동으로 채우기') + '</button></div>';
     if (note) h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
     h += '</div>';
@@ -197,16 +201,61 @@ setInterval(function(){
   drawTimers();
 }, 500);
 
+var ytq = "";
+function isUrl(u){ return /^https?:\/\/\S+$/.test(String(u || "").trim()); }
+function ytId(u){
+  var m = String(u || "").trim().match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : "";
+}
+function ytUrl(q){ return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q || ""); }
+function updYt(){ var e = document.getElementById("yt-q"); if (!e) return; ytq = e.value; document.getElementById("yt-go").href = ytUrl(ytq); }
+function ytKey(ev){ if (ev.key === "Enter") { updYt(); var a = document.getElementById("yt-go"); if (a) a.click(); } }
+function updSrc(){
+  var e = document.getElementById("f-src"), a = document.getElementById("src-open"); if (!e || !a) return;
+  var v = e.value.trim(), ok = isUrl(v);
+  a.href = ok ? v : "#"; a.style.display = ok ? "inline-block" : "none";
+}
+async function fetchVideo(vid){
+  var mcp = await claude.use("mcp");
+  if (!mcp) throw { message: "이 화면에서는 영상 정보를 가져올 수 없어요. 설명글을 아래 칸에 붙여 넣어 주세요." };
+  var S = "PlayMCP", parts = [], got = [], lastErr = null;
+  function pick(p){
+    if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { return null; } }
+    return p && (p[vid] || p);
+  }
+  try {
+    var d = await mcp.callTool(S, "YouTubeData-get_video_details", { video_ids: [vid], description_detail: "LONG" });
+    var v = pick(d.payload);
+    if (v && (v.title || v.description)) { parts.push("제목: " + (v.title || "") + "\n설명: " + (v.description || "")); got.push("설명"); }
+  } catch (e) { lastErr = e; }
+  var langs = ["ko", "en"];
+  for (var i = 0; i < langs.length; i++) {
+    try {
+      var t = await mcp.callTool(S, "YouTubeData-get_transcripts", { video_ids: [vid], lang: langs[i], format_type: "full_text" });
+      var tv = pick(t.payload);
+      if (tv && tv.text) { parts.push("자막:\n" + tv.text); got.push("자막"); break; }
+    } catch (e) { lastErr = lastErr || e; }
+  }
+  if (!parts.length) {
+    var c = lastErr && lastErr.code;
+    if (c === "server_not_connected" || c === "needs_reauth" || c === "selection_required") throw { message: "영상 정보를 가져오는 연결(PlayMCP)이 안 되어 있어요. claude.ai 설정의 커넥터에서 연결을 확인해 주세요. 지금은 설명글을 아래 칸에 붙여 넣어 주세요." };
+    if (c === "approval_required" || c === "not_in_manifest" || c === "consent_required") throw { message: "영상 정보를 가져오는 허락이 필요해요. 허락 창이 뜨면 허용해 주세요. 지금은 설명글을 아래 칸에 붙여 넣어도 돼요." };
+    throw { message: "영상 설명과 자막을 가져오지 못했어요. 설명글을 아래 칸에 붙여 넣어 주세요." };
+  }
+  return { text: parts.join("\n\n"), from: got.join("과 ") };
+}
 async function organize(){
   readForm();
-  if (!draft.raw.trim()) { note = draft.source.trim() ? "링크만으로는 영상 내용을 읽을 수 없어요. 영상 설명글이나 자막을 '붙여 넣을 자료' 칸에 넣어 주세요." : "붙여 넣을 자료를 먼저 넣어 주세요."; noteErr = true; render(); return; }
+  var material = draft.raw.trim(), vid = ytId(draft.source), usedFrom = "";
+  if (!material && !vid) { note = draft.source.trim() ? "유튜브 영상 주소로 읽을 수 없어요. 주소가 맞는지 확인하거나, 설명글을 아래 칸에 붙여 넣어 주세요." : "유튜브 링크를 넣거나, 자료를 붙여 넣어 주세요."; noteErr = true; render(); return; }
   busy = true; note = ""; render();
   try {
+    if (!material) { var fv = await fetchVideo(vid); material = fv.text; usedFrom = fv.from; }
     var sample = await claude.use("sample");
     if (!sample) throw { message: "이 화면에서는 자동 정리를 쓸 수 없어요. 아래 칸에 직접 적어 주세요." };
     var prompt = "아래 자료는 요리 레시피 설명이야. 자료에 실제로 있는 내용만 써서 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
       "형식: {\"name\":\"요리 이름\",\"time\":분 단위 숫자 또는 null,\"ingredients\":[\"재료 + 분량\"],\"steps\":[\"한 단계씩 짧은 문장\"]}\n" +
-      "규칙: 불 세기(강불·중불·약불)와 시간(몇 분)이 자료에 있으면 해당 단계 문장에 '강불에서 10분'처럼 그대로 넣어. 자료에 없는 재료, 분량, 시간은 지어내지 마. 모르면 time은 null, 분량은 빼고 재료 이름만 써. 한국어로 써.\n\n자료:\n" + draft.raw.slice(0, 12000);
+      "규칙: 불 세기(강불·중불·약불)와 시간(몇 분)이 자료에 있으면 해당 단계 문장에 '강불에서 10분'처럼 그대로 넣어. 자료에 없는 재료, 분량, 시간은 지어내지 마. 모르면 time은 null, 분량은 빼고 재료 이름만 써. 한국어로 써.\n\n자료:\n" + material.slice(0, 12000);
     var out = await sample(prompt, { cache: false });
     var m = String(out.text || "").match(/\{[\s\S]*\}/);
     if (!m) throw { message: "정리 결과를 읽지 못했어요. 다시 눌러 주세요." };
@@ -215,7 +264,7 @@ async function organize(){
     draft.time = (j.time != null ? j.time : draft.time);
     draft.ingredients = (j.ingredients || []).join("\n");
     draft.steps = (j.steps || []).join("\n");
-    note = "채웠어요. 아래 내용이 자료와 맞는지 확인하고 고쳐 주세요."; noteErr = false;
+    note = (usedFrom ? "영상의 " + usedFrom + "(으)로 채웠어요. " : "채웠어요. ") + (usedFrom === "설명" ? "자막은 못 가져와서 설명 앞부분만 썼어요. 부족하면 설명글을 붙여 넣어 주세요. " : "") + "아래 내용이 맞는지 확인하고 고쳐 주세요."; noteErr = false;
   } catch (e) {
     note = (e && e.code === "not_granted") ? "자동 정리 사용을 허락해야 해요." : ((e && e.message) || "정리에 실패했어요. 다시 눌러 주세요.");
     noteErr = true;
