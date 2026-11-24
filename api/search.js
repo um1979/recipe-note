@@ -22,16 +22,22 @@ module.exports = async function handler(req, res) {
     "한국어로 써.";
 
   try {
-    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: TASTY_RULES }] },
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
-    });
-    const data = await r.json().catch(function () { return {}; });
+    // 제미나이가 "요청이 몰렸다(503)"고 하면 잠깐 쉬고 최대 3번까지 다시 해 봐요
+    let r, data;
+    for (let t = 0; t < 3; t++) {
+      r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: TASTY_RULES }] },
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      data = await r.json().catch(function () { return {}; });
+      if (r.status !== 503) break;
+      await new Promise(function (ok) { setTimeout(ok, 2000 * (t + 1)); });
+    }
     if (!r.ok) {
       const m = (data && data.error && data.error.message) || "Gemini가 오류를 돌려줬어요.";
       return res.status(502).json({ error: "Gemini 오류: " + m });
