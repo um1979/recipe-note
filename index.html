@@ -265,7 +265,8 @@ async function initCloud(){
   if (authUser) await loadCloud(); else render();
 }
 var ytq = "", autoTimer = null, sq = "", noteFrom = "";
-var HAS_API = (typeof claude === "undefined") && !/github\.io$/.test(location.hostname) && location.protocol === "https:";
+var API_BASE = /github\.io$/.test(location.hostname) ? "https://recipe-note-sand.vercel.app" : "";
+var HAS_API = (typeof claude === "undefined") && location.protocol === "https:";
 function isUrl(u){ return /^https?:\/\/\S+$/.test(String(u || "").trim()); }
 function ytId(u){
   var m = String(u || "").trim().match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/);
@@ -324,10 +325,10 @@ async function searchFill(){
   var q = (sq || "").trim();
   noteFrom = "search";
   if (q.length < 2) { note = "찾을 요리 이름을 적어 주세요."; noteErr = true; render(); return; }
-  if (!HAS_API) { note = "이 주소(GitHub 주소)에서는 검색 기능을 쓸 수 없어요. 서버(Vercel)에 올린 주소에서만 돼요."; noteErr = true; render(); return; }
+  if (!HAS_API) { note = "서버에 연결하지 못했어요."; noteErr = true; render(); return; }
   busy = true; note = ""; render();
   try {
-    var r = await fetch("/api/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+    var r = await fetch(API_BASE + "/api/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
     var j = await r.json().catch(function(){ return {}; });
     if (!r.ok) throw { message: j.error || "찾기에 실패했어요. 다시 눌러 주세요." };
     draft.name = j.name || draft.name;
@@ -346,7 +347,7 @@ async function organize(){
   if (typeof claude === "undefined" && HAS_API && !material) {
     busy = true; note = ""; render();
     try {
-      var r = await fetch("/api/fill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: draft.source.trim() }) });
+      var r = await fetch(API_BASE + "/api/fill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: draft.source.trim() }) });
       var j2 = await r.json().catch(function(){ return {}; });
       if (!r.ok) throw { message: j2.error || "자동 채우기에 실패했어요. 다시 눌러 주세요." };
       draft.name = j2.name || draft.name;
