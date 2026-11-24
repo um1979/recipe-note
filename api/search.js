@@ -2,10 +2,11 @@
 // 유튜브 링크 없이 검색만으로 레시피를 채워요.
 // 필요한 비밀 값: GEMINI_API_KEY (Vercel 환경 변수에만 넣고, 코드에는 쓰지 않아요)
 // 근거: Google 공식 문서 "Grounding with Google Search" (ai.google.dev/gemini-api/docs/google-search)
+//   - 모델은 고정값: gemini-3.5-flash-lite (무료 한도가 넉넉한 모델)
 //   - 주소: POST https://generativelanguage.googleapis.com/v1beta/interactions
 //   - 키는 x-goog-api-key 헤더, 검색 켜기는 tools: [{ type: "google_search" }]
 //   - 답은 steps 중 type이 model_output인 곳의 content[].text, 출처는 그 text의 annotations(url_citation)
-const MODEL = process.env.GEMINI_SEARCH_MODEL || "gemini-3.8-flash";
+const MODEL = "gemini-3.5-flash-lite";
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST로만 쓸 수 있어요." });
