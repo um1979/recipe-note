@@ -80,7 +80,7 @@ function render(){
   if (CLOUD && !authUser) { app.innerHTML = loginHtml(); return; }
   if (view === "list") {
     h += '<div class="top"><h1>🍳 내 레시피 수첩</h1><button class="primary" onclick="openForm()">+ 자료로 추가</button></div>';
-    h += '<div class="card" style="padding:10px 12px"><div style="display:flex;gap:8px;align-items:center"><input type="text" id="yt-q" placeholder="유튜브에서 찾고 싶은 요리 검색" value="' + esc(ytq) + '" oninput="updYt()" onkeydown="ytKey(event)"><a id="yt-go" class="primary linkbtn" target="_blank" rel="noopener" href="' + ytUrl(ytq) + '">▶ 검색</a></div><div class="meta">누르면 유튜브가 새 창으로 열려요. 영상을 보다가 링크를 복사해서 "+ 자료로 추가"에 넣으면 돼요.</div></div>';
+    h += '<div class="card" style="padding:10px 12px"><div style="display:flex;gap:8px;align-items:center"><input type="text" id="yt-q" placeholder="만들고 싶은 요리 입력 (예: 김치찌개)" onkeydown="if(event.key===\'Enter\')listSearch()"><button class="primary" onclick="listSearch()">🔍 찾아서 작성</button></div><div class="meta">요리 이름만 적으면 제미나이가 검색해서 레시피를 써 줘요. 링크가 있으면 "+ 자료로 추가"에 넣으세요.</div></div>';
     if (!recipes.length) h += '<div class="empty">아직 레시피가 없어요.<br>유튜브 설명글이나 레시피 글을 붙여 넣으면<br>Claude가 칸을 채워 줘요.</div>';
     recipes.forEach(function(r){
       h += '<div class="card item" onclick="openDetail(' + r.id + ')"><div><b>' + esc(r.name) + '</b><div class="meta">조리 ' + esc(r.time) + '분 · 재료 ' + lines(r.ingredients).length + '개 · 단계 ' + lines(r.steps).length + '개</div></div><span>›</span></div>';
@@ -314,6 +314,10 @@ async function fetchVideo(vid){
     throw { message: "영상 설명과 자막을 가져오지 못했어요. 설명글을 아래 칸에 붙여 넣어 주세요." };
   }
   return { text: parts.join("\n\n"), from: got.join("과 ") };
+}
+function listSearch(){
+  var e = document.getElementById("yt-q"), q = e ? e.value : "";
+  openForm(); sq = q; searchFill();
 }
 async function searchFill(){
   readForm();
