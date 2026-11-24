@@ -105,12 +105,17 @@ function render(){
     h += '</div><div class="row"><button class="ghost" onclick="resetChecks(' + r.id + ')">체크 모두 지우기</button><button class="danger" onclick="del(' + r.id + ')">삭제</button></div>';
   } else {
     h += '<button class="ghost" onclick="goList()">‹ 취소</button><h1>자료로 레시피 추가</h1>';
+    h += '<div class="box"><p><b>🔍 요리 이름으로 찾기</b><br>링크 없이 이름만 적으면 제미나이가 구글 검색으로 레시피를 찾아서 칸을 채워 줘요.</p>';
+    h += '<input type="text" id="f-q" placeholder="예: 김치찌개" value="' + esc(sq) + '" oninput="sq=this.value" onkeydown="if(event.key===\'Enter\')searchFill()">';
+    h += '<div class="row"><button class="primary" onclick="searchFill()"' + (busy ? ' disabled' : '') + '>' + (busy ? '찾는 중…' : '🔍 검색해서 채우기') + '</button></div>';
+    if (note && noteFrom === "search") h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
+    h += '</div>';
     h += '<div class="box"><p><b>1단계.</b> 유튜브 링크를 붙여 넣으면 Claude가 영상 설명과 자막을 가져와서 칸을 자동으로 채워요. 안 채워지면 아래 버튼을 눌러요.<br>자막이 없거나 안 읽히면, 설명글·블로그 글을 아래 칸에 붙여 넣어 주세요.</p>';
     h += '<label class="l">영상 링크</label><input type="text" id="f-src" placeholder="https://youtube.com/..." oninput="updSrc()" value="' + esc(draft && draft.source) + '">';
     h += '<a id="src-open" class="ghost linkbtn" target="_blank" rel="noopener" href="' + (isUrl(draft && draft.source) ? esc(draft.source) : '#') + '" style="display:' + (isUrl(draft && draft.source) ? 'inline-block' : 'none') + ';margin-top:4px">▶ 영상 열어서 보기</a>';
     h += '<label class="l">붙여 넣을 자료 (링크만 쓰면 비워 둬요)</label><textarea id="f-raw" style="min-height:140px" placeholder="여기에 설명글이나 자막을 붙여 넣어요">' + esc(draft && draft.raw) + '</textarea>';
     h += '<div class="row"><button class="primary" id="btn-ai" onclick="organize()"' + (busy ? ' disabled' : '') + '>' + (busy ? '정리하는 중…' : '✨ 칸 자동으로 채우기') + '</button></div>';
-    if (note) h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
+    if (note && noteFrom !== "search") h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
     h += '</div>';
     h += '<h2>2단계. 채워진 내용 확인하고 고치기</h2>';
     h += '<label class="l">이름</label><input type="text" id="f-name" value="' + esc(draft && draft.name) + '">';
@@ -126,7 +131,7 @@ function readForm(){
   draft = { source: v("f-src"), raw: v("f-raw"), name: v("f-name"), time: v("f-time"), ingredients: v("f-ing"), steps: v("f-steps") };
 }
 function goList(){ view = "list"; render(); }
-function openForm(){ draft = { source: "", raw: "", name: "", time: "", ingredients: "", steps: "" }; note = ""; busy = false; view = "form"; render(); }
+function openForm(){ draft = { source: "", raw: "", name: "", time: "", ingredients: "", steps: "" }; note = ""; noteFrom = ""; sq = ""; busy = false; view = "form"; render(); }
 function openDetail(id){ current = id; view = "detail"; render(); }
 function tick(id, k){ var c = checks[id] || (checks[id] = {}); c[k] = !c[k]; render(); }
 function resetChecks(id){ checks[id] = {}; render(); }
@@ -259,7 +264,7 @@ async function initCloud(){
   });
   if (authUser) await loadCloud(); else render();
 }
-var ytq = "", autoTimer = null;
+var ytq = "", autoTimer = null, sq = "", noteFrom = "";
 var HAS_API = (typeof claude === "undefined") && !/github\.io$/.test(location.hostname) && location.protocol === "https:";
 function isUrl(u){ return /^https?:\/\/\S+$/.test(String(u || "").trim()); }
 function ytId(u){
@@ -310,8 +315,28 @@ async function fetchVideo(vid){
   }
   return { text: parts.join("\n\n"), from: got.join("과 ") };
 }
-async function organize(){
+async function searchFill(){
   readForm();
+  var q = (sq || "").trim();
+  noteFrom = "search";
+  if (q.length < 2) { note = "찾을 요리 이름을 적어 주세요."; noteErr = true; render(); return; }
+  if (!HAS_API) { note = "이 주소(GitHub 주소)에서는 검색 기능을 쓸 수 없어요. 서버(Vercel)에 올린 주소에서만 돼요."; noteErr = true; render(); return; }
+  busy = true; note = ""; render();
+  try {
+    var r = await fetch("/api/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+    var j = await r.json().catch(function(){ return {}; });
+    if (!r.ok) throw { message: j.error || "찾기에 실패했어요. 다시 눌러 주세요." };
+    draft.name = j.name || draft.name;
+    draft.time = (j.time != null ? j.time : draft.time);
+    draft.ingredients = (j.ingredients || []).join("\n");
+    draft.steps = (j.steps || []).join("\n");
+    if (!draft.source.trim() && j.sources && j.sources[0]) draft.source = j.sources[0].url;
+    note = "검색해서 채웠어요. 인터넷 글을 정리한 거라 틀릴 수 있어요. 아래 내용이 맞는지 확인하고 고쳐 주세요." + (j.sources && j.sources.length ? " (참고: " + j.sources.slice(0, 3).map(function(x){ return x.title; }).join(", ") + ")" : ""); noteErr = false;
+  } catch (e) { note = (e && e.message) || "찾기에 실패했어요."; noteErr = true; }
+  busy = false; render();
+}
+async function organize(){
+  readForm(); noteFrom = "";
   var material = draft.raw.trim(), vid = ytId(draft.source), usedFrom = "";
   if (!material && !vid) { note = draft.source.trim() ? "유튜브 영상 주소로 읽을 수 없어요. 주소가 맞는지 확인하거나, 설명글을 아래 칸에 붙여 넣어 주세요." : "유튜브 링크를 넣거나, 자료를 붙여 넣어 주세요."; noteErr = true; render(); return; }
   if (typeof claude === "undefined" && HAS_API && !material) {
