@@ -80,7 +80,7 @@ function render(){
   if (CLOUD && !authUser) { app.innerHTML = loginHtml(); return; }
   if (view === "list") {
     h += '<div class="top"><h1>🍳 내 레시피 수첩</h1><button class="primary" onclick="openForm()">+ 자료로 추가</button></div>';
-    h += '<div class="card" style="padding:10px 12px"><div style="display:flex;gap:8px;align-items:center"><input type="text" id="yt-q" placeholder="만들고 싶은 요리 입력 (예: 김치찌개)" onkeydown="if(event.key===\'Enter\')listSearch()"><button class="primary" onclick="listSearch()">🔍 찾아서 작성</button></div><div class="meta">요리 이름만 적으면 제미나이가 검색해서 레시피를 써 줘요. 링크가 있으면 "+ 자료로 추가"에 넣으세요.</div></div>';
+    h += '<div class="card" style="padding:10px 12px"><div style="display:flex;gap:8px;align-items:center"><input type="text" id="yt-q" placeholder="만들고 싶은 요리 입력 (예: 김치찌개)" onkeydown="if(event.key===\'Enter\')listSearch()"><button class="primary" onclick="listSearch()">🔍 찾아서 작성</button></div><div class="meta">요리 이름만 적으면 제미나이가 아는 대로 레시피를 써 줘요. 링크가 있으면 "+ 자료로 추가"에 넣으세요.</div></div>';
     if (!recipes.length) h += '<div class="empty">아직 레시피가 없어요.<br>유튜브 설명글이나 레시피 글을 붙여 넣으면<br>Claude가 칸을 채워 줘요.</div>';
     recipes.forEach(function(r){
       h += '<div class="card item" onclick="openDetail(' + r.id + ')"><div><b>' + esc(r.name) + '</b><div class="meta">조리 ' + esc(r.time) + '분 · 재료 ' + lines(r.ingredients).length + '개 · 단계 ' + lines(r.steps).length + '개</div></div><span>›</span></div>';
@@ -105,9 +105,9 @@ function render(){
     h += '</div><div class="row"><button class="ghost" onclick="resetChecks(' + r.id + ')">체크 모두 지우기</button><button class="danger" onclick="del(' + r.id + ')">삭제</button></div>';
   } else {
     h += '<button class="ghost" onclick="goList()">‹ 취소</button><h1>자료로 레시피 추가</h1>';
-    h += '<div class="box"><p><b>🔍 요리 이름으로 찾기</b><br>링크 없이 이름만 적으면 제미나이가 구글 검색으로 레시피를 찾아서 칸을 채워 줘요.</p>';
+    h += '<div class="box"><p><b>🔍 요리 이름으로 찾기</b><br>링크 없이 이름만 적으면 제미나이가 아는 대로 레시피를 써서 칸을 채워 줘요. (인터넷 검색은 아니에요)</p>';
     h += '<input type="text" id="f-q" placeholder="예: 김치찌개" value="' + esc(sq) + '" oninput="sq=this.value" onkeydown="if(event.key===\'Enter\')searchFill()">';
-    h += '<div class="row"><button class="primary" onclick="searchFill()"' + (busy ? ' disabled' : '') + '>' + (busy ? '찾는 중…' : '🔍 검색해서 채우기') + '</button></div>';
+    h += '<div class="row"><button class="primary" onclick="searchFill()"' + (busy ? ' disabled' : '') + '>' + (busy ? '찾는 중…' : '✨ 이름으로 채우기') + '</button></div>';
     if (note && noteFrom === "search") h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
     h += '</div>';
     h += '<div class="box"><p><b>1단계.</b> 유튜브 링크를 붙여 넣으면 Claude가 영상 설명과 자막을 가져와서 칸을 자동으로 채워요. 안 채워지면 아래 버튼을 눌러요.<br>자막이 없거나 안 읽히면, 설명글·블로그 글을 아래 칸에 붙여 넣어 주세요.</p>';
@@ -335,7 +335,7 @@ async function searchFill(){
     draft.ingredients = (j.ingredients || []).join("\n");
     draft.steps = (j.steps || []).join("\n");
     if (!draft.source.trim() && j.sources && j.sources[0]) draft.source = j.sources[0].url;
-    note = "검색해서 채웠어요. 인터넷 글을 정리한 거라 틀릴 수 있어요. 아래 내용이 맞는지 확인하고 고쳐 주세요." + (j.sources && j.sources.length ? " (참고: " + j.sources.slice(0, 3).map(function(x){ return x.title; }).join(", ") + ")" : ""); noteErr = false;
+    note = "제미나이가 아는 대로 써서 채웠어요(검색 아님). 틀릴 수 있어요. 아래 내용이 맞는지 확인하고 고쳐 주세요." + (j.sources && j.sources.length ? "" : ""); noteErr = false;
   } catch (e) { note = (e && e.message) || "찾기에 실패했어요."; noteErr = true; }
   busy = false; render();
 }

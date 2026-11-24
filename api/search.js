@@ -1,11 +1,7 @@
-// 요리 이름을 받아 Gemini가 구글 검색으로 레시피를 찾아 정리하는 서버 함수 (Vercel)
-// 유튜브 링크 없이 검색만으로 레시피를 채워요.
+// 요리 이름을 받아 Gemini가 레시피를 써 주는 서버 함수 (Vercel)
+// 유튜브 링크 없이 이름만으로 칸을 채워요. (구글 검색은 무료 키로 안 돼서 쓰지 않아요)
 // 필요한 비밀 값: GEMINI_API_KEY (Vercel 환경 변수에만 넣고, 코드에는 쓰지 않아요)
-// 근거: Google 공식 문서 "Grounding with Google Search" (ai.google.dev/gemini-api/docs/google-search)
-//   - 모델은 고정값: gemini-3.5-flash-lite (무료 한도가 넉넉한 모델)
-//   - 주소: POST https://generativelanguage.googleapis.com/v1beta/interactions
-//   - 키는 x-goog-api-key 헤더, 검색 켜기는 tools: [{ type: "google_search" }]
-//   - 답은 steps 중 type이 model_output인 곳의 content[].text, 출처는 그 text의 annotations(url_citation)
+// 모델은 고정값: gemini-3.5-flash-lite (무료 한도가 넉넉한 모델)
 const MODEL = "gemini-3.5-flash-lite";
 
 module.exports = async function handler(req, res) {
@@ -18,47 +14,35 @@ module.exports = async function handler(req, res) {
   if (q.length < 2) return res.status(400).json({ error: "찾을 요리 이름을 적어 주세요." });
 
   const prompt =
-    "구글 검색으로 '" + q + "' 레시피를 찾아서 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
+    "'" + q + "' 요리의 일반적인 레시피를 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
     '형식: {"name":"요리 이름","time":분 단위 숫자 또는 null,"ingredients":["재료 + 분량"],"steps":["한 단계씩 짧은 문장"]}\n' +
-    "규칙: 검색 결과에 실제로 나온 내용만 써. 없는 재료, 분량, 시간은 지어내지 마. 모르면 time은 null, 분량은 빼고 재료 이름만 써. " +
-    "불 세기(강불·중불·약불)와 시간(몇 분)이 검색 결과에 있으면 해당 단계 문장에 '강불에서 10분'처럼 그대로 넣어. 한국어로 써.";
+    "규칙: 요리 이름이 실제 요리가 아니거나 모르겠으면 지어내지 말고 ingredients와 steps를 빈 배열로 줘. " +
+    "확실하지 않은 분량과 시간은 쓰지 말고 재료 이름만 써. time은 모르면 null. 불 세기(강불·중불·약불)와 시간(몇 분)은 단계 문장에 '강불에서 10분'처럼 넣어. 한국어로 써.";
 
   try {
-    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({ model: MODEL, input: prompt, tools: [{ type: "google_search" }] })
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      })
     });
     const data = await r.json().catch(function () { return {}; });
     if (!r.ok) {
       const m = (data && data.error && data.error.message) || "Gemini가 오류를 돌려줬어요.";
       return res.status(502).json({ error: "Gemini 오류: " + m });
     }
-    let text = "";
-    const sources = [];
-    (data.steps || []).forEach(function (s) {
-      if (s.type !== "model_output") return;
-      (s.content || []).forEach(function (c) {
-        if (c.type !== "text") return;
-        text += c.text || "";
-        (c.annotations || []).forEach(function (a) {
-          if (a.type === "url_citation" && a.url && sources.every(function (x) { return x.url !== a.url; })) {
-            sources.push({ url: a.url, title: a.title || a.url });
-          }
-        });
-      });
-    });
+    const text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts
+      ? data.candidates[0].content.parts.map(function (p) { return p.text || ""; }).join("") : "";
     const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return res.status(502).json({ error: "검색 결과에서 레시피를 읽지 못했어요. 요리 이름을 바꿔서 다시 해 보세요." });
+    if (!m) return res.status(502).json({ error: "레시피를 읽지 못했어요. 요리 이름을 바꿔서 다시 해 보세요." });
     let j;
     try { j = JSON.parse(m[0]); } catch (e) { return res.status(502).json({ error: "정리 결과를 읽지 못했어요. 다시 눌러 주세요." }); }
-    return res.status(200).json({
-      name: j.name || q,
-      time: j.time == null ? null : j.time,
-      ingredients: Array.isArray(j.ingredients) ? j.ingredients : [],
-      steps: Array.isArray(j.steps) ? j.steps : [],
-      sources: sources.slice(0, 5)
-    });
+    const ing = Array.isArray(j.ingredients) ? j.ingredients : [];
+    const steps = Array.isArray(j.steps) ? j.steps : [];
+    if (!ing.length && !steps.length) return res.status(404).json({ error: "이 요리는 잘 모르겠어요. 이름을 바꾸거나 링크·글을 붙여 넣어 주세요." });
+    return res.status(200).json({ name: j.name || q, time: j.time == null ? null : j.time, ingredients: ing, steps: steps });
   } catch (e) {
     return res.status(500).json({ error: "찾기에 실패했어요: " + (e && e.message ? e.message : e) });
   }
