@@ -2,6 +2,7 @@
 // 유튜브 링크 없이 이름만으로 칸을 채워요. (구글 검색은 무료 키로 안 돼서 쓰지 않아요)
 // 필요한 비밀 값: GEMINI_API_KEY (Vercel 환경 변수에만 넣고, 코드에는 쓰지 않아요)
 // 모델은 고정값: gemini-3.5-flash-lite (무료 한도가 넉넉한 모델)
+const { TASTY_RULES, normalizeSteps } = require("./_recipe-rules.js");
 const MODEL = "gemini-3.5-flash-lite";
 
 module.exports = async function handler(req, res) {
@@ -14,16 +15,16 @@ module.exports = async function handler(req, res) {
   if (q.length < 2) return res.status(400).json({ error: "찾을 요리 이름을 적어 주세요." });
 
   const prompt =
-    "'" + q + "' 요리의 일반적인 레시피를 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
+    "'" + q + "' 요리의 레시피를 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
     '형식: {"name":"요리 이름","time":분 단위 숫자 또는 null,"ingredients":["재료 + 분량"],"steps":["한 단계씩 짧은 문장"]}\n' +
-    "규칙: 요리 이름이 실제 요리가 아니거나 모르겠으면 지어내지 말고 ingredients와 steps를 빈 배열로 줘. " +
-    "확실하지 않은 분량과 시간은 쓰지 말고 재료 이름만 써. time은 모르면 null. 불 세기(강불·중불·약불)와 시간(몇 분)은 단계 문장에 '강불에서 10분'처럼 넣어. 한국어로 써.";
+    "한국어로 써.";
 
   try {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
+        systemInstruction: { parts: [{ text: TASTY_RULES }] },
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
       })
@@ -40,7 +41,7 @@ module.exports = async function handler(req, res) {
     let j;
     try { j = JSON.parse(m[0]); } catch (e) { return res.status(502).json({ error: "정리 결과를 읽지 못했어요. 다시 눌러 주세요." }); }
     const ing = Array.isArray(j.ingredients) ? j.ingredients : [];
-    const steps = Array.isArray(j.steps) ? j.steps : [];
+    const steps = normalizeSteps(j.steps);
     if (!ing.length && !steps.length) return res.status(404).json({ error: "이 요리는 잘 모르겠어요. 이름을 바꾸거나 링크·글을 붙여 넣어 주세요." });
     return res.status(200).json({ name: j.name || q, time: j.time == null ? null : j.time, ingredients: ing, steps: steps });
   } catch (e) {

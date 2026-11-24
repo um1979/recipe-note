@@ -1,5 +1,6 @@
 // 유튜브 링크를 받아 Gemini에게 레시피를 정리시키는 작은 서버 함수 (Vercel)
 // 필요한 비밀 값: GEMINI_API_KEY (Vercel 환경 변수에만 넣고, 코드에는 쓰지 않아요)
+const { TIMER_RULES, normalizeSteps } = require("./_recipe-rules.js");
 const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
 function isYoutube(u) {
@@ -21,7 +22,7 @@ module.exports = async function handler(req, res) {
   const prompt =
     "이 영상은 요리 레시피야. 영상에 실제로 나오는 내용만 써서 JSON 하나만 출력해. 설명 문장이나 코드블록 표시는 쓰지 마.\n" +
     '형식: {"name":"요리 이름","time":분 단위 숫자 또는 null,"ingredients":["재료 + 분량"],"steps":["한 단계씩 짧은 문장"]}\n' +
-    "규칙: 불 세기(강불·중불·약불)와 시간(몇 분)이 영상에 있으면 해당 단계 문장에 '강불에서 10분'처럼 그대로 넣어. 영상에 없는 재료, 분량, 시간은 지어내지 마. 모르면 time은 null, 분량은 빼고 재료 이름만 써. 한국어로 써.";
+    "규칙: 불 세기(강불·중불·약불)와 시간(몇 분)이 영상에 있으면 해당 단계 문장에 '강불에서 10분'처럼 그대로 넣어. 영상에 없는 재료, 분량, 시간은 지어내지 마. 모르면 time은 null, 분량은 빼고 재료 이름만 써. 한국어로 써.\n" + TIMER_RULES;
 
   try {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", {
@@ -46,7 +47,7 @@ module.exports = async function handler(req, res) {
       name: j.name || "",
       time: j.time == null ? null : j.time,
       ingredients: Array.isArray(j.ingredients) ? j.ingredients : [],
-      steps: Array.isArray(j.steps) ? j.steps : []
+      steps: normalizeSteps(j.steps)
     });
   } catch (e) {
     return res.status(500).json({ error: "정리에 실패했어요: " + (e && e.message ? e.message : e) });
