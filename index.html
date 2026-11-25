@@ -68,7 +68,7 @@ var recipes = [{
   steps: "애호박과 양파를 한입 크기로 썬다\n팬에 들기름을 두르고 양파를 넣어 강불에서 2분 볶는다\n애호박을 넣고 강불로 10분 볶는다\n소금으로 간을 한다",
   saved: "2026-11-21"
 }];
-var view = "list", current = null, draft = null, busy = false, note = "", noteErr = false, checks = {};
+var view = "list", current = null, draft = null, busy = false, note = "", noteErr = false, checks = {}, serv = 2;
 try { var s = localStorage.getItem("recipes2"); if (s) recipes = JSON.parse(s); } catch (e) {}
 function save(){ try { localStorage.setItem("recipes2", JSON.stringify(recipes)); } catch (e) {} }
 function esc(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
@@ -92,10 +92,13 @@ function render(){
     h += '<button class="ghost" onclick="goList()">‹ 목록</button><h1>' + esc(r.name) + '</h1><div class="meta">조리시간 ' + esc(r.time) + '분 · 저장한 날 ' + esc(r.saved) + '</div>';
     if (isUrl(r.source)) h += '<div style="margin-top:10px"><a class="primary linkbtn" href="' + esc(r.source) + '" target="_blank" rel="noopener">▶ 원본 영상·글 열기</a></div>';
     h += '<div class="card" style="display:flex;gap:8px;align-items:center;margin-top:12px"><span>⏱ 직접 타이머</span><input type="number" id="c-min" inputmode="decimal" placeholder="몇 분" style="width:90px"><button class="primary" onclick="startCustom()">시작</button></div>';
-    h += '<h2>🛒 재료 (챙기면 눌러요)</h2><div class="card" style="padding:4px 12px">';
+    h += '<h2>🛒 재료 (챙기면 눌러요)</h2>';
+    h += '<div class="card" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span>🍽 몇 인분?</span><span style="display:flex;gap:10px;align-items:center"><button class="primary" onclick="setServ(-1)" aria-label="인분 줄이기">−</button><b style="font-size:20px;min-width:64px;text-align:center">' + serv + '인분</b><button class="primary" onclick="setServ(1)" aria-label="인분 늘리기">＋</button></span></div>';
+    h += '<div class="hint">저장된 레시피는 2인분 기준으로 계산해요. 숫자가 없는 재료(약간 등)는 그대로예요. 양념은 입맛 보며 조금씩 늘리세요.</div>';
+    h += '<div class="card" style="padding:4px 12px">';
     lines(r.ingredients).forEach(function(x, i){
       var k = "i" + i;
-      h += '<label class="chk' + (c[k] ? ' done' : '') + '"><input type="checkbox"' + (c[k] ? ' checked' : '') + ' onchange="tick(' + r.id + ',\'' + k + '\')"><span>' + esc(x) + '</span></label>';
+      h += '<label class="chk' + (c[k] ? ' done' : '') + '"><input type="checkbox"' + (c[k] ? ' checked' : '') + ' onchange="tick(' + r.id + ',\'' + k + '\')"><span>' + esc(scaleLine(x)) + '</span></label>';
     });
     h += '</div><h2>👩‍🍳 조리 순서 (끝내면 눌러요)</h2><div class="card" style="padding:4px 12px">';
     lines(r.steps).forEach(function(x, i){
@@ -132,7 +135,26 @@ function readForm(){
 }
 function goList(){ view = "list"; render(); }
 function openForm(){ draft = { source: "", raw: "", name: "", time: "", ingredients: "", steps: "" }; note = ""; noteFrom = ""; sq = ""; busy = false; view = "form"; render(); }
-function openDetail(id){ current = id; view = "detail"; render(); }
+function openDetail(id){ current = id; view = "detail"; serv = 2; render(); }
+// 인분 계산: 저장된 재료는 2인분 기준으로 보고, 숫자와 '반'만 비율대로 바꿔요. ('약간'처럼 숫자 없는 말은 그대로)
+function setServ(d){ serv = Math.min(8, Math.max(1, serv + d)); render(); }
+function fmtNum(v){
+  if (v >= 10) return String(Math.round(v));
+  var q = Math.round(v * 4) / 4;
+  if (q <= 0) q = 0.25;
+  return String(q);
+}
+function scaleLine(t){
+  var f = serv / 2;
+  if (f === 1) return t;
+  // 한 번에 훑어서 바꿔요(이미 바꾼 숫자를 또 바꾸지 않게)
+  return t.replace(/(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+)|(\d+(?:\.\d+)?)|(^|\s)반(?=\s|개|컵|스푼|큰술|작은술|모|단|봉|근|통|$)/g, function(m, a, b, c, d, e, g, h, pre){
+    if (a !== undefined) return fmtNum((+a + b / c) * f);
+    if (d !== undefined) return fmtNum(d / e * f);
+    if (g !== undefined) return fmtNum(parseFloat(g) * f);
+    return h + fmtNum(0.5 * f);
+  });
+}
 function tick(id, k){ var c = checks[id] || (checks[id] = {}); c[k] = !c[k]; render(); }
 function resetChecks(id){ checks[id] = {}; render(); }
 function add(){
