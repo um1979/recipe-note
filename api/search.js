@@ -4,6 +4,7 @@
 // 모델은 고정값: gemini-3.5-flash-lite (무료 한도가 넉넉한 모델)
 const { TASTY_RULES, normalizeSteps } = require("./_recipe-rules.js");
 const cors = require("./_cors.js");
+const guard = require("./_guard.js");
 const MODEL = "gemini-3.5-flash-lite";
 // 기본 모델이 계속 바쁠 때(503)만 쓰는 예비 모델(같은 Flash-Lite 계열, 무료 사용 가능)
 const BACKUP_MODEL = "gemini-3.1-flash-lite";
@@ -11,6 +12,7 @@ const BACKUP_MODEL = "gemini-3.1-flash-lite";
 module.exports = async function handler(req, res) {
   if (cors(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "POST로만 쓸 수 있어요." });
+  if (guard(req, res)) return;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return res.status(500).json({ error: "서버에 GEMINI_API_KEY가 아직 없어요." });
   let body = req.body;

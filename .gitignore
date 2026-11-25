@@ -1,0 +1,7 @@
+# 비밀 값은 절대 올리지 않아요
+GEMINI_API_KEY.txt
+*.key
+.env
+.env.*
+.vercel
+node_modules

@@ -12,3 +12,4 @@ module.exports = function cors(req, res) {
   if (req.method === "OPTIONS") { res.status(204).end(); return true; }
   return false;
 };
+module.exports.OK = OK;

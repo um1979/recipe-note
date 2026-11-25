@@ -2,6 +2,7 @@
 // 필요한 비밀 값: GEMINI_API_KEY (Vercel 환경 변수에만 넣고, 코드에는 쓰지 않아요)
 const { TIMER_RULES, normalizeSteps } = require("./_recipe-rules.js");
 const cors = require("./_cors.js");
+const guard = require("./_guard.js");
 const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
 function isYoutube(u) {
@@ -14,6 +15,7 @@ function isYoutube(u) {
 module.exports = async function handler(req, res) {
   if (cors(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "POST로만 쓸 수 있어요." });
+  if (guard(req, res)) return;
   const key = process.env.GEMINI_API_KEY;
   if (!key) return res.status(500).json({ error: "서버에 GEMINI_API_KEY가 아직 없어요." });
   let body = req.body;
