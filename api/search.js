@@ -5,6 +5,8 @@
 const { TASTY_RULES, normalizeSteps } = require("./_recipe-rules.js");
 const cors = require("./_cors.js");
 const MODEL = "gemini-3.5-flash-lite";
+// 기본 모델이 계속 바쁠 때(503)만 쓰는 예비 모델(같은 Flash-Lite 계열, 무료 사용 가능)
+const BACKUP_MODEL = "gemini-3.1-flash-lite";
 
 module.exports = async function handler(req, res) {
   if (cors(req, res)) return;
@@ -22,10 +24,11 @@ module.exports = async function handler(req, res) {
     "한국어로 써.";
 
   try {
-    // 제미나이가 "요청이 몰렸다(503)"고 하면 잠깐 쉬고 최대 3번까지 다시 해 봐요
+    // 제미나이가 "요청이 몰렸다(503)"고 하면 기본 모델을 2번, 그래도 안 되면 예비 모델을 2번 더 해 봐요
     let r, data;
-    for (let t = 0; t < 3; t++) {
-      r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", {
+    const tries = [MODEL, MODEL, BACKUP_MODEL, BACKUP_MODEL];
+    for (let t = 0; t < tries.length; t++) {
+      r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + tries[t] + ":generateContent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
@@ -36,7 +39,7 @@ module.exports = async function handler(req, res) {
       });
       data = await r.json().catch(function () { return {}; });
       if (r.status !== 503) break;
-      await new Promise(function (ok) { setTimeout(ok, 2000 * (t + 1)); });
+      await new Promise(function (ok) { setTimeout(ok, 1500); });
     }
     if (!r.ok) {
       const m = (data && data.error && data.error.message) || "Gemini가 오류를 돌려줬어요.";
