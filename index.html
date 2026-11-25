@@ -109,7 +109,6 @@ function render(){
     var r = find(current), c = checks[r.id] || (checks[r.id] = {});
     h += '<button class="ghost" onclick="goList()">‹ 목록</button><h1>' + esc(r.name) + '</h1><div class="meta">조리시간 ' + esc(r.time) + '분 · 저장한 날 ' + esc(r.saved) + '</div>';
     if (isUrl(r.source)) h += '<div style="margin-top:10px"><a class="primary linkbtn" href="' + esc(r.source) + '" target="_blank" rel="noopener">▶ 원본 영상·글 열기</a></div>';
-    h += '<div class="card" style="display:flex;gap:8px;align-items:center;margin-top:12px"><span>⏱ 직접 타이머</span><input type="number" id="c-min" inputmode="decimal" placeholder="몇 분" style="width:90px"><button class="primary" onclick="startCustom()">시작</button></div>';
     h += '<h2>🛒 재료 (챙기면 눌러요)</h2>';
     h += '<div class="card" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span>🍽 몇 인분?</span><span style="display:flex;gap:10px;align-items:center"><button class="primary" onclick="setServ(-1)" aria-label="인분 줄이기">−</button><b style="font-size:20px;min-width:64px;text-align:center">' + serv + '인분</b><button class="primary" onclick="setServ(1)" aria-label="인분 늘리기">＋</button></span></div>';
     h += '<div class="hint">저장된 레시피는 2인분 기준으로 계산해요. 숫자가 없는 재료(약간 등)는 그대로예요. 양념은 입맛 보며 조금씩 늘리세요.</div>';
@@ -131,11 +130,21 @@ function render(){
     h += '<div class="row"><button class="primary" onclick="searchFill()"' + (busy ? ' disabled' : '') + '>' + (busy ? '찾는 중…' : '✨ 이름으로 채우기') + '</button></div>';
     if (note && noteFrom === "search") h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
     h += '</div>';
-    h += '<div class="box"><p><b>1단계.</b> 유튜브 링크를 붙여 넣으면 Claude가 영상 설명과 자막을 가져와서 칸을 자동으로 채워요. 안 채워지면 아래 버튼을 눌러요.<br>자막이 없거나 안 읽히면, 설명글·블로그 글을 아래 칸에 붙여 넣어 주세요.</p>';
-    h += '<label class="l">영상 링크</label><input type="text" id="f-src" placeholder="https://youtube.com/..." oninput="updSrc()" value="' + esc(draft && draft.source) + '">';
+    if (recsQ) {
+      h += '<h2>▶ "' + esc(recsQ) + '" 관련 추천 영상</h2>';
+      if (recsMsg === "loading") h += '<div class="hint">추천 영상 찾는 중…</div>';
+      recs.forEach(function(v){
+        h += '<div class="card" style="display:flex;gap:10px;align-items:center"><a href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener" style="flex:none"><img src="https://i.ytimg.com/vi/' + esc(v.id) + '/mqdefault.jpg" alt="" style="width:120px;border-radius:8px;display:block"></a>' +
+          '<div style="flex:1;min-width:0"><b style="font-size:15px">' + esc(v.title) + '</b><div class="meta">' + esc(v.channel) + '</div><button class="ghost" onclick="useVideo(\'' + esc(v.id) + '\')">이 영상 연결</button></div></div>';
+      });
+      if (recsMsg === "nokey") h += '<div class="hint">영상 카드는 서버에 유튜브 키(YOUTUBE_API_KEY)를 넣으면 나와요. 지금은 아래 버튼으로 유튜브 검색 결과를 열어요.</div>';
+      else if (recsMsg && recsMsg !== "loading") h += '<div class="msg err">' + esc(recsMsg) + '</div>';
+      h += '<a class="ghost linkbtn" href="' + esc(ytUrl(recsQ + " 레시피")) + '" target="_blank" rel="noopener">▶ 유튜브에서 \'' + esc(recsQ) + ' 레시피\' 더 찾아보기</a>';
+    }
+    h += '<div class="box"><p><b>▶ 유튜브 링크로 채우기</b><br>유튜브 링크만 붙여 넣으면 영상을 보고 칸을 자동으로 채워 줘요.</p>';
+    h += '<input type="text" id="f-src" placeholder="https://youtube.com/..." oninput="updSrc()" value="' + esc(draft && draft.source) + '">';
     h += '<a id="src-open" class="ghost linkbtn" target="_blank" rel="noopener" href="' + (isUrl(draft && draft.source) ? esc(draft.source) : '#') + '" style="display:' + (isUrl(draft && draft.source) ? 'inline-block' : 'none') + ';margin-top:4px">▶ 영상 열어서 보기</a>';
-    h += '<label class="l">붙여 넣을 자료 (링크만 쓰면 비워 둬요)</label><textarea id="f-raw" style="min-height:140px" placeholder="여기에 설명글이나 자막을 붙여 넣어요">' + esc(draft && draft.raw) + '</textarea>';
-    h += '<div class="row"><button class="primary" id="btn-ai" onclick="organize()"' + (busy ? ' disabled' : '') + '>' + (busy ? '정리하는 중…' : '✨ 칸 자동으로 채우기') + '</button></div>';
+    if (busy && noteFrom !== "search") h += '<div class="hint">영상을 보고 채우는 중… (조금 걸려요)</div>';
     if (note && noteFrom !== "search") h += '<div class="msg ' + (noteErr ? 'err' : 'ok') + '">' + esc(note) + '</div>';
     h += '</div>';
     h += '<h2>2단계. 채워진 내용 확인하고 고치기</h2>';
@@ -152,7 +161,7 @@ function readForm(){
   draft = { source: v("f-src"), raw: v("f-raw"), name: v("f-name"), time: v("f-time"), ingredients: v("f-ing"), steps: v("f-steps") };
 }
 function goList(){ view = "list"; render(); }
-function openForm(){ draft = { source: "", raw: "", name: "", time: "", ingredients: "", steps: "" }; note = ""; noteFrom = ""; sq = ""; busy = false; view = "form"; render(); }
+function openForm(){ recs = []; recsQ = ""; recsMsg = ""; lastAutoId = ""; draft = { source: "", raw: "", name: "", time: "", ingredients: "", steps: "" }; note = ""; noteFrom = ""; sq = ""; busy = false; view = "form"; render(); }
 function openDetail(id){ current = id; view = "detail"; serv = 2; render(); }
 // 인분 계산: 저장된 재료는 2인분 기준으로 보고, 숫자와 '반'만 비율대로 바꿔요. ('약간'처럼 숫자 없는 말은 그대로)
 function setServ(d){ serv = Math.min(8, Math.max(1, serv + d)); render(); }
@@ -217,11 +226,6 @@ function addTimer(label, secs){
   drawTimers();
 }
 function startTimer(rid, si, secs){ var r = find(rid); addTimer((r ? r.name : "") + " · " + (si + 1) + "단계", secs); }
-function startCustom(){
-  var e = document.getElementById("c-min"), v = e ? parseFloat(e.value) : 0;
-  if (!v || v <= 0) { if (e) e.focus(); return; }
-  addTimer("직접 타이머 " + v + "분", Math.round(v * 60));
-}
 function dismissTimer(id){
   timers = timers.filter(function(t){ return t.id !== id; });
   if (!timers.some(function(t){ return t.done; })) stopRing();
@@ -304,7 +308,7 @@ async function initCloud(){
   });
   if (authUser) await loadCloud(); else render();
 }
-var ytq = "", autoTimer = null, sq = "", noteFrom = "";
+var ytq = "", autoTimer = null, sq = "", noteFrom = "", recs = [], recsQ = "", recsMsg = "", lastAutoId = "";
 var API_BASE = /github\.io$/.test(location.hostname) ? "https://recipe-note-sand.vercel.app" : "";
 var HAS_API = (typeof claude === "undefined") && location.protocol === "https:";
 function isUrl(u){ return /^https?:\/\/\S+$/.test(String(u || "").trim()); }
@@ -323,7 +327,8 @@ function updSrc(){
   if ((typeof claude !== "undefined" || HAS_API) && ytId(v) && !busy) {
     autoTimer = setTimeout(function(){
       readForm();
-      if (ytId(draft.source) && !draft.raw.trim() && !draft.name.trim() && !draft.ingredients.trim() && !draft.steps.trim() && !busy) organize();
+      var id = ytId(draft.source);
+      if (id && id !== lastAutoId && !busy) { lastAutoId = id; organize(); }
     }, 700);
   }
 }
@@ -379,7 +384,21 @@ async function searchFill(){
     note = "제미나이가 아는 대로 써서 채웠어요(검색 아님). 틀릴 수 있어요. 아래 내용이 맞는지 확인하고 고쳐 주세요." + (j.sources && j.sources.length ? "" : ""); noteErr = false;
   } catch (e) { note = (e && e.message) || "찾기에 실패했어요."; noteErr = true; }
   busy = false; render();
+  if (!noteErr) loadRecs(q);
 }
+// 관련 추천 영상 (서버에 유튜브 키가 있을 때만 카드가 나오고, 없으면 검색 버튼만 보여요)
+async function loadRecs(q){
+  recsQ = q; recs = []; recsMsg = "loading"; render();
+  try {
+    var r = await fetch(API_BASE + "/api/videos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+    var j = await r.json().catch(function(){ return {}; });
+    if (r.status === 501) recsMsg = "nokey";
+    else if (!r.ok) recsMsg = j.error || "추천 영상을 불러오지 못했어요.";
+    else { recs = Array.isArray(j.videos) ? j.videos : []; recsMsg = recs.length ? "" : "관련 영상을 찾지 못했어요."; }
+  } catch (e) { recsMsg = "추천 영상을 불러오지 못했어요."; }
+  if (view === "form" && recsQ === q) { readForm(); render(); }
+}
+function useVideo(id){ readForm(); draft.source = "https://www.youtube.com/watch?v=" + id; render(); }
 async function organize(){
   readForm(); noteFrom = "";
   var material = draft.raw.trim(), vid = ytId(draft.source), usedFrom = "";
